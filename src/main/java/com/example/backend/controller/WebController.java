@@ -1,6 +1,7 @@
 
 package com.example.backend.controller;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.sql.*;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 
 @RestController
@@ -19,25 +23,20 @@ public class WebController {
 
     @GetMapping("/")
     public ResponseEntity<InputStreamResource> download() throws Exception {
-
-        int number_of_lines = 2000000;
+        Connection conn = DriverManager.getConnection("url");
+        conn.setAutoCommit(false);
+        Statement st = conn.createStatement();
+        st.setFetchSize(10000);
+        ResultSet rs = st.executeQuery("SELECT * FROM table");
         File temp = new File("textfile.csv");
-        temp.delete();
         FileOutputStream outputStream = new FileOutputStream(temp);
-
-
-        for (int i = 0; i < number_of_lines; i++) {
-            if(i%100000 == 0)
-                System.out.println("Progress: " + (i*100d)/number_of_lines);
-            StringBuilder sb = new StringBuilder();
-            for (int k = 0; k < 80; k++) {
-                sb.append(Math.random() + ",");
-            }
-            byte[] buffer = (sb.toString() + "\n").getBytes();
+        while (rs.next()) {
+            String s = getCsvRowFromRs(rs);
+            byte[] buffer = (s.toString() + "\n").getBytes();
             outputStream.write(buffer);
         }
-        outputStream.close();
 
+        outputStream.close();
 
         HttpHeaders respHeaders = new HttpHeaders();
         MediaType mediaType = new MediaType("text", "csv");
@@ -48,6 +47,14 @@ public class WebController {
         return new ResponseEntity<>(isr, respHeaders, HttpStatus.OK);
 
 
+    }
+
+    private String getCsvRowFromRs(ResultSet rs) throws SQLException {
+        return getCommaSeparatedStrings(rs.getString("column1"), rs.getString("column2"));
+    }
+
+    private String getCommaSeparatedStrings(String... s){
+        return Arrays.stream(s).collect(Collectors.joining(","));
     }
 
 }
